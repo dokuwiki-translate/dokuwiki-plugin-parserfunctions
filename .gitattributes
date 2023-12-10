@@ -5,3 +5,5 @@
 .gitignore      export-ignore
 .gitattributes  export-ignore
 .travis.yml     export-ignore
+# plugin
+manager.dat
