@@ -42,7 +42,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         /* READ: https://www.dokuwiki.org/devel:parser:getsort_list
          * Don't understand exactly what it does, need more study.
          *
-         * Should go after WST plugin, to be able to render {{{1}}}.
+         * Should go after Templater and WST plugin, to be able to render @1@ and {{{1}}}.
          */
         return 320;
     }
@@ -54,7 +54,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          * Regex accepts any alphabetical function name
          * but not nested functions
          */
-        $this->Lexer->addSpecialPattern('\{\{#[A-Za-z]+:[^(#\}\})]+#\}\}', $mode, 'plugin_parserfunctions');
+        $this->Lexer->addSpecialPattern('\{\{#[[:alpha:]]+:[^(\{\{#)(#\}\})]+#\}\}', $mode, 'plugin_parserfunctions');
 //        $this->Lexer->addEntryPattern('<FIXME>', $mode, 'plugin_parserfunctions');
     }
 
@@ -92,22 +92,21 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             return false;
         }
         
-        // Function name: "{{#if"
-        $func_name = preg_split('/:/', $match);
-        /* Function name: "if"
-         * strtolower converts only ASCII
-         * PhpString::strtolower supports UTF-8, added by "use dokuwiki\Utf8\PhpString;" at line 15
-         * The function names will probably only use ASCII characters, but it's a precaution.
+        /* Function name: "if", "ifeq", "ifexpr" etc.
+         * strtolower converts only ASCII; PhpString::strtolower supports UTF-8,
+         * added by "use dokuwiki\Utf8\PhpString;" at line 15. The function
+         * names will probably only use ASCII characters, but it's a precaution.
          */
-        $func_name = PhpString::strtolower(substr($func_name[0], 3));
+        $func_name = preg_replace('/\{\{#([[:alpha:]]+):.*#\}\}/', '\1', $match);
+        $func_name = PhpString::strtolower($func_name);
 
-        // Delete delimiters "{{#if:" and "#}}".
-        $parts = substr($match, 6, -3);
+        // Delete delimiters "{{#functionname:" and "#}}".
+        $parts = preg_replace('/\{\{#[[:alpha:]]+:(.*)#\}\}/', '\1', $match);
         
         // Create list with all parameters splited by "|" pipe
-        // Could use "preg_split('/\|/', $parts)" too
+        // Could use "preg_split('/\|/', $parts)" instead
         $params = explode('|', $parts);
-        
+
         // Stripping whitespace from the beginning and end of strings
         foreach ($params as &$value) {
             $value = trim($value);
@@ -119,6 +118,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             // funtion, then write the funtion.
             case 'if':
                 $func_result = $this->_IF($params, $func_name);
+                break;
+            case 'ifeq':
+                $func_result = $this->_IFEQ($params, $func_name);
                 break;
             default:
                 $func_result = ' <span style="color: red;">' . $this->getLang('error') .
@@ -167,26 +169,50 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     
     /**
      * ========== #IF
-     * {{#if: first parameter | second parameter | third optional parameter }}
-     * {{#if: test string | value if test string is not empty | value if test string is empty (or only white space) }}
+     * {{#if: 1st parameter | 2nd parameter | 3rd optional parameter #}}
+     * {{#if: test string | value if test string is not empty | value if test string is empty (or only white space) #}}
      */
     function _IF($params, $func_name)
     {
-        if ( !isset($params[1]) ) {
+        if ( count($params) < 2 ) {
             $result = ' <span style="color: red;">' . $this->getLang('error') . 
                       ' <code>'. $func_name . '</code>: ' . $this->getLang('not_enough_params') .
                       ' </span>';
         } else {
             if ( !empty($params[0]) ) {
                 $result = $params[1];
-            } else if ( !empty($params[2]) ) {
+            } else {
+                if ( !empty($params[2]) ) {
+                    $result = $params[2];
+                } else {
+                    /**
+                     * The last parameter (false) must have been intentionally omitted:
+                     * user wants the result to be null if the test string is empty.
+                     */
+                    $result = null;
+                }
+            }
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * ========== #IFEQ
+     * {{#ifeq: 1st parameter | 2nd parameter | 3rd parameter | 4th parameter #}}
+     * {{#ifeq: string 1 | string 2 | value if identical | value if different #}}
+     */
+    function _IFEQ($params, $func_name)
+    {
+        if ( count($params) < 4 ) {
+            $result = ' <span style="color: red;">' . $this->getLang('error') . 
+                      ' <code>'. $func_name . '</code>: ' . $this->getLang('not_enough_params') .
+                      ' </span>';
+        } else {
+            if ( $params[0] == $params[1] ) {
                 $result = $params[2];
             } else {
-                /**
-                 * The last parameter (false) must have been intentionally omitted:
-                 * user wants the result to be null if the test string is empty.
-                 */
-                $result = null;
+                $result = $params[3];
             }
         }
         

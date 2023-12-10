@@ -6,4 +6,4 @@
  */
 $lang['error']              = "ERROR in function";
 $lang['no_such_function']   = "there is no such function!";
-$lang['not_enough_params']  = "poorly constructed, needs at least 2 parameters!";
+$lang['not_enough_params']  = "not enough parameters were provided!";
