@@ -4,14 +4,14 @@
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  Daniel "Nerun" Rodrigues <danieldiasr@gmail.com>
+ * @created: Sat, 09 Dec 2023 14:59 -0300
  * 
  * This is my first plugin, and I don't even know PHP well, that's why it's full
  * of comments, but I'll leave it that way so I can consult it in the future.
  * 
- * Sat, 09 Dec 2023 14:59 -0300
  */
-
 use dokuwiki\Extension\SyntaxPlugin;
+use dokuwiki\Utf8\PhpString;
 
 class syntax_plugin_parserfunctions extends SyntaxPlugin
 {
@@ -51,10 +51,10 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     public function connectTo($mode)
     {
         /* READ: https://www.dokuwiki.org/devel:syntax_plugins#patterns
-         * {{#if: test string | value if test string is not empty | value if test string is empty (or only white space) }}
-         * {{#if: first parameter | second parameter | third parameter }}
+         * Regex accepts any alphabetical function name
+         * but not nested functions
          */
-        $this->Lexer->addSpecialPattern('\{\{#[Ii][Ff]:[^(#\}\})(\|)]*\|[^(#\}\})(\|)]*\|[^(#\}\})(\|)]*#\}\}', $mode, 'plugin_parserfunctions');
+        $this->Lexer->addSpecialPattern('\{\{#[A-Za-z]+:[^(#\}\})]+#\}\}', $mode, 'plugin_parserfunctions');
 //        $this->Lexer->addEntryPattern('<FIXME>', $mode, 'plugin_parserfunctions');
     }
 
@@ -92,10 +92,19 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             return false;
         }
         
-        // Delete delimiters "{{#if:"" and "#}}".
+        // Function name: "{{#if"
+        $func_name = preg_split('/:/', $match);
+        /* Function name: "if"
+         * strtolower converts only ASCII
+         * PhpString::strtolower supports UTF-8, added by "use dokuwiki\Utf8\PhpString;" at line 15
+         * The function names will probably only use ASCII characters, but it's a precaution.
+         */
+        $func_name = PhpString::strtolower(substr($func_name[0], 3));
+
+        // Delete delimiters "{{#if:" and "#}}".
         $parts = substr($match, 6, -3);
         
-        // Create list of size 3: each parameter
+        // Create list with all parameters splited by "|" pipe
         // Could use "preg_split('/\|/', $parts)" too
         $params = explode('|', $parts);
         
@@ -104,16 +113,20 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             $value = trim($value);
         }
         
-        /* FINALLY: do the work!
-         * {{#if: test string | value if test string is not empty | value if test string is empty (or only white space) }}
-         * {{#if: first parameter | second parameter | third parameter }}
-         */
-        if ( !empty($params[0]) ) {
-            $func_result = $params[1];
-        } else {
-            $func_result = $params[2];
+        // ==================== FINALLY: do the work! ====================
+        switch($func_name){
+            // To add a new function, first add a "case" below, make it call a
+            // funtion, then write the funtion.
+            case 'if':
+                $func_result = $this->_IF($params, $func_name);
+                break;
+            default:
+                $func_result = ' <span style="color: red;">' . $this->getLang('error') .
+                               ' <code>'. $func_name . '</code>: ' . 
+                               $this->getLang('no_such_function') . ' </span>';
+                break;
         }
-
+        
         // The instructions provided to the render() method:
         return $func_result;
     }
@@ -150,6 +163,34 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
 		$renderer->doc .= $data;
 
         return true;
+    }
+    
+    /**
+     * ========== #IF
+     * {{#if: first parameter | second parameter | third optional parameter }}
+     * {{#if: test string | value if test string is not empty | value if test string is empty (or only white space) }}
+     */
+    function _IF($params, $func_name)
+    {
+        if ( !isset($params[1]) ) {
+            $result = ' <span style="color: red;">' . $this->getLang('error') . 
+                      ' <code>'. $func_name . '</code>: ' . $this->getLang('not_enough_params') .
+                      ' </span>';
+        } else {
+            if ( !empty($params[0]) ) {
+                $result = $params[1];
+            } else if ( !empty($params[2]) ) {
+                $result = $params[2];
+            } else {
+                /**
+                 * The last parameter (false) must have been intentionally omitted:
+                 * user wants the result to be null if the test string is empty.
+                 */
+                $result = null;
+            }
+        }
+        
+        return $result;
     }
 }
 // vim:ts=4:sw=4:et:enc=utf-8:
