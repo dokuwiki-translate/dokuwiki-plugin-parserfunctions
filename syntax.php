@@ -42,7 +42,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         /* READ: https://www.dokuwiki.org/devel:parser:getsort_list
          * Don't understand exactly what it does, need more study.
          *
-         * Should go after Templater and WST plugin, to be able to render @1@ and {{{1}}}.
+         * Should go after Templater (302) and WST (319) plugin, to be able to
+         * render @parameter@ and {{{parameter}}}.
          */
         return 320;
     }
@@ -98,7 +99,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          * names will probably only use ASCII characters, but it's a precaution.
          * The 's' at the end of '/pattern/s' adds support to multiline strings.
          */
-        $func_name = preg_replace('/\{\{#([[:alpha:]]+):.*#\}\}/s', '\1', $match);
+        $func_name = preg_replace('/\{\{#([[:alpha:](&#)]+):.*#\}\}/s', '\1', $match);
         $func_name = PhpString::strtolower($func_name);
 
         // Delete delimiters "{{#functionname:" and "#}}".
@@ -125,7 +126,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
                 $func_result = $this->_IFEQ($params, $func_name);
                 break;
             case 'switch':
-                $func_result = $this->_SWITCH($params, $func_name);
+                $func_result = $this->_SWITCH($params);
                 break;
             default:
                 $func_result = ' <span style="color: red;">' . $this->getLang('error') .
@@ -166,6 +167,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             return false;
         }
         
+        // escape sequences
+        $data = $this->_escape($data);
+
         // Do not use <div></div> because we need inline substitution!
 		$renderer->doc .= $data;
 
@@ -234,7 +238,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * | default result
      * #}}
      */
-    function _SWITCH($params, $func_name)
+    function _SWITCH($params)
     {
         /**
          * Then:
@@ -285,6 +289,31 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         }
         
         return $result;
+    }
+    
+    /**
+     * Escape sequence handling
+     */
+    function _escape($data){
+        /**
+         * To add more escapes, please refer to:
+         * https://www.freeformatter.com/html-entities.html
+         * 
+         * Always use "&&num;__number__;" instead of "&#;__number__;"
+         * 
+         * Number sign "#" can be escaped with "&num;" and don't need to be
+         * added to the array below.
+         */
+        $escapes = array(
+            "&&num;61;"  => "=",
+            "&&num;124;" => "|"
+        );
+        
+        foreach ( $escapes as $key => $value ) {
+            $data = preg_replace("/$key/s", $value, $data);
+        }
+        
+        return $data;
     }
 }
 // vim:ts=4:sw=4:et:enc=utf-8:
