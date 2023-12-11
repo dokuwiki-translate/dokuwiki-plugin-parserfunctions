@@ -96,12 +96,14 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          * strtolower converts only ASCII; PhpString::strtolower supports UTF-8,
          * added by "use dokuwiki\Utf8\PhpString;" at line 15. The function
          * names will probably only use ASCII characters, but it's a precaution.
+         * The 's' at the end of '/pattern/s' adds support to multiline strings.
          */
-        $func_name = preg_replace('/\{\{#([[:alpha:]]+):.*#\}\}/', '\1', $match);
+        $func_name = preg_replace('/\{\{#([[:alpha:]]+):.*#\}\}/s', '\1', $match);
         $func_name = PhpString::strtolower($func_name);
 
         // Delete delimiters "{{#functionname:" and "#}}".
-        $parts = preg_replace('/\{\{#[[:alpha:]]+:(.*)#\}\}/', '\1', $match);
+        // The 's' at the end of '/pattern/s' adds support to multiline strings.
+        $parts = preg_replace('/\{\{#[[:alpha:]]+:(.*)#\}\}/s', '\1', $match);
         
         // Create list with all parameters splited by "|" pipe
         // Could use "preg_split('/\|/', $parts)" instead
@@ -121,6 +123,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
                 break;
             case 'ifeq':
                 $func_result = $this->_IFEQ($params, $func_name);
+                break;
+            case 'switch':
+                $func_result = $this->_SWITCH($params, $func_name);
                 break;
             default:
                 $func_result = ' <span style="color: red;">' . $this->getLang('error') .
@@ -214,6 +219,69 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             } else {
                 $result = $params[3];
             }
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * ========== #SWITCH
+     * {{#switch: comparison string
+     * | case = result
+     * | case = result
+     * | ...
+     * | case = result
+     * | default result
+     * #}}
+     */
+    function _SWITCH($params, $func_name)
+    {
+        /**
+         * Then:
+         * 
+         * "$params":
+         *      (
+         *          [0] => test string
+         *          [1] => case 1 = value 1
+         *          [2] => case 2 = value 2
+         *          [3] => case 3 = value 3
+         *          [4] => default value
+         *      )
+         */
+
+        $cases_kv = [];
+        $test_and_default_string = [];
+        
+        foreach ( $params as $value ){
+	        $value = preg_split('/=/', $value);
+        	if ( isset($value[1]) ) {
+        		$cases_kv[trim($value[0])] = trim($value[1]);
+        	} else {
+        		$test_and_default_string[] = trim($value[0]);
+        	}
+        }
+
+        /**
+         * And now:
+         * 
+         * "$cases_kv":
+         *      (
+         *          [case 1] => value 1
+         *          [case 2] => value 2
+         *          [case 3] => value 3
+         *      )
+         * 
+         * "$test_and_default_string":
+         *      (
+         *          [0] => test string
+         *          [1] => default value
+         *      )
+         */
+
+        if ( array_key_exists($test_and_default_string[0], $cases_kv) ) {
+        	$result = $cases_kv[$test_and_default_string[0]];
+        } else {
+        	$result = $test_and_default_string[1] ?? '';
         }
         
         return $result;
