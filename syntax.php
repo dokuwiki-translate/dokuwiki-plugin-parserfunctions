@@ -306,7 +306,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          */
         $escapes = array(
             "&&num;61;"  => "=",
-            "&&num;124;" => "|"
+            "&&num;123;" => "{",
+            "&&num;124;" => "|",
+            "&&num;125;" => "}"
         );
         
         foreach ( $escapes as $key => $value ) {
