@@ -19,7 +19,7 @@ DokuWiki. Refer to [Plugins](https://www.dokuwiki.org/plugins) on how
 to install plugins manually.
 
 ----
-Copyright (C) 2023 Daniel "Nerun" Rodrigues (danieldiasr@gmail.com)
+Copyright (C) 2023-2024 Daniel "Nerun" Rodrigues (danieldiasr@gmail.com)
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
