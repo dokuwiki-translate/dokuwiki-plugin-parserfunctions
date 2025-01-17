@@ -31,7 +31,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         /* READ: https://www.dokuwiki.org/devel:syntax_plugins
          * normal — (default value, will be used if the method is not overridden)
          *          The plugin output will be inside a paragraph (or another block
-         *           element), no paragraphs will be inside.
+         *          element), no paragraphs will be inside.
          */
         return 'normal';
     }
@@ -118,7 +118,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         // ==================== FINALLY: do the work! ====================
         switch($func_name){
             // To add a new function, first add a "case" below, make it call a
-            // funtion, then write the funtion.
+            // function, then write the function.
             case 'if':
                 $func_result = $this->_IF($params, $func_name);
                 break;
@@ -171,6 +171,11 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         $data = $this->_escape($data);
 
         // Do not use <div></div> because we need inline substitution!
+		// Both substr() and preg_replace() do the same thing: remove the
+		// first '<p>' and the last '</p>'
+		$data = $renderer->render_text($data, 'xhtml');
+		//$data = substr( $data, 4, -5 );
+		$data = preg_replace( '/<p>((.|\n)*?)<\/p>/', '\1', $data );
 		$renderer->doc .= $data;
 
         return true;
