@@ -282,8 +282,27 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         	if ( isset($value[1]) ) {
         		$cases_kv[trim($value[0])] = trim($value[1]);
         	} else {
-        		$test_and_default_string[] = trim($value[0]);
-        	}
+		        if ( count($cases_kv) == 0 or count($cases_kv) == count($params) ) {
+			        $test_and_default_string[] = trim($value[0]);
+		        } else {
+			        $cases_kv[trim($value[0])] = '%%FALL_THROUGH_TEMP_MARKER%%';
+		        }
+	        }
+        }
+        
+        $count = 0;
+
+        foreach ( $cases_kv as $key=>$value ){
+            $count++;
+	        if ( $value == '%%FALL_THROUGH_TEMP_MARKER%%' ){
+		        $subDict = array_slice($cases_kv, $count);
+		        foreach ( $subDict as $chave=>$valor ){
+			        if ( $valor != '%%FALL_THROUGH_TEMP_MARKER%%' ){
+				        $cases_kv[$key] = $valor;
+				        break;
+			        }
+		        }
+	        }
         }
 
         /**
