@@ -29,9 +29,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     public function getPType()
     {
         /* READ: https://www.dokuwiki.org/devel:syntax_plugins
-         * normal — (default value, will be used if the method is not overridden)
-         *          The plugin output will be inside a paragraph (or another block
-         *          element), no paragraphs will be inside.
+         * normal — Default value, will be used if the method is not overridden.
+         *          The plugin output will be inside a paragraph (or another
+         *          block element), no paragraphs will be inside.
          */
         return 'normal';
     }
@@ -42,7 +42,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         /* READ: https://www.dokuwiki.org/devel:parser:getsort_list
          * Don't understand exactly what it does, need more study.
          *
-         * Should go after Templater (302) and WST (319) plugin, to be able to
+         * Must go after Templater (302) and WST (319) plugin, to be able to
          * render @parameter@ and {{{parameter}}}.
          */
         return 320;
@@ -52,18 +52,13 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     public function connectTo($mode)
     {
         /* READ: https://www.dokuwiki.org/devel:syntax_plugins#patterns
-         * Regex accepts any alphabetical function name
-         * but not nested functions
+         * This pattern accepts any alphabetical function name but not nested
+         * functions.
+         *
+         * ChatGPT helped me to fix this pattern! (18 jan 2025)
          */
-        $this->Lexer->addSpecialPattern('\{\{#[[:alpha:]]+:[^(\{\{#)(#\}\})]+#\}\}', $mode, 'plugin_parserfunctions');
-//        $this->Lexer->addEntryPattern('<FIXME>', $mode, 'plugin_parserfunctions');
+        $this->Lexer->addSpecialPattern('\{\{#[[:alpha:]]+:(?:(?!\{\{#|#\}\}).)*#\}\}', $mode, 'plugin_parserfunctions');
     }
-
-//    /** @inheritDoc */
-//    public function postConnect()
-//    {
-//        $this->Lexer->addExitPattern('</FIXME>', 'plugin_parserfunctions');
-//    }
 
     /** @inheritDoc */
     public function handle($match, $state, $pos, Doku_Handler $handler)
@@ -79,13 +74,14 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          *
          *   $match   (string)  — The text matched by the patterns
          *    
-         *   $state   (int)     — The lexer state for the match, representing the type
-         *                        of pattern which triggered this call to handle():
-         *                        DOKU_LEXER_SPECIAL — a pattern set by addSpecialPattern()
+         *   $state   (int)     — The lexer state for the match, representing
+         *                        the type of pattern which triggered this call
+         *                        to handle(): DOKU_LEXER_SPECIAL — a pattern
+         *                        set by addSpecialPattern().
          *   
          *   $pos     (int)     — The character position of the matched text.
          *   
-         *   $handler (Doku_Handler) — Object Reference to the Doku_Handler object.
+         *   $handler           — Object Reference to the Doku_Handler object.
          */
         
         // Exit if no text matched by the patterns.
@@ -107,13 +103,19 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         $parts = preg_replace('/\{\{#[[:alpha:]]+:(.*)#\}\}/s', '\1', $match);
         
         // Create list with all parameters splited by "|" pipe
-        // Could use "preg_split('/\|/', $parts)" instead
+        // 1st) Replace pipe '|' by a temporary marker
+        $parts = str_replace('%%|%%', '%%TEMP_MARKER%%', $parts);
+        // 2nd) Create list of parameters splited by pipe "|"
         $params = explode('|', $parts);
+        //3rd) Restoring temporary marker to `%%|%%`
+        $params = str_replace('%%TEMP_MARKER%%', '%%|%%', $params);
+        /* This snippet above was necessary to allow the escape sequence of the
+         * pipe character "|" using the standard DokuWiki formatting syntax
+         * which is to wrap it in "%%".
+         */
 
         // Stripping whitespace from the beginning and end of strings
-        foreach ($params as &$value) {
-            $value = trim($value);
-        }
+        $params = array_map('trim', $params);
         
         // ==================== FINALLY: do the work! ====================
         switch($func_name){
@@ -143,20 +145,21 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     public function render($mode, Doku_Renderer $renderer, $data)
     {
         /* READ: https://www.dokuwiki.org/devel:syntax_plugins#render_method
-         * The part of the plugin that provides the output for the final web page.
+         * The part of the plugin that provides the output for the final web
+         * page.
          *
          * Parameters:
          *
-         *   $mode     — Name for the format mode of the final output produced by the
-         *               renderer.
+         *   $mode     — Name for the format mode of the final output produced
+         *               by the renderer.
          *
-         *   $renderer — Give access to the object Doku_Renderer, which contains useful
-         *               functions and values.
+         *   $renderer — Give access to the object Doku_Renderer, which contains
+         *               useful functions and values.
          *
-         *   $data     — An array containing the instructions previously prepared
-         *               and returned by the plugin's own handle() method. The render()
-         *               must interpret the instruction and generate the appropriate
-         *               output.
+         *   $data     — An array containing the instructions previously
+         *               prepared and returned by the plugin's own handle()
+         *               method. The render() must interpret the instruction and
+         *               generate the appropriate output.
          */
         
         if ($mode !== 'xhtml') {
@@ -184,7 +187,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     /**
      * ========== #IF
      * {{#if: 1st parameter | 2nd parameter | 3rd optional parameter #}}
-     * {{#if: test string | value if test string is not empty | value if test string is empty (or only white space) #}}
+     * {{#if: test string | value if test string is not empty | value if test
+     * string is empty (or only white space) #}}
      */
     function _IF($params, $func_name)
     {
@@ -200,8 +204,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
                     $result = $params[2];
                 } else {
                     /**
-                     * The last parameter (false) must have been intentionally omitted:
-                     * user wants the result to be null if the test string is empty.
+                     * The last parameter (false) must have been intentionally
+                     * omitted: user wants the result to be null if the test
+                     * string is empty.
                      */
                     $result = null;
                 }
@@ -262,7 +267,18 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         $test_and_default_string = [];
         
         foreach ( $params as $value ){
-	        $value = preg_split('/=/', $value);
+            // 1st) Replace escaped equal sign '%%|%%' by a temporary marker
+            $value = str_replace('%%=%%', '%%TEMP_MARKER%%', $value);
+            // 2nd) Create list of values splited by equal sign "="
+            $value = explode('=', $value);
+            //3rd) Restoring temporary marker to `%%=%%`
+            $value = str_replace('%%TEMP_MARKER%%', '%%=%%', $value);
+            /* This snippet above was necessary to allow the escape sequence of
+             * the equal sign "=" using the standard DokuWiki formatting syntax
+             * which is to wrap it in "%%".
+             * (same as lines 103-113 above)
+             */
+
         	if ( isset($value[1]) ) {
         		$cases_kv[trim($value[0])] = trim($value[1]);
         	} else {
@@ -304,16 +320,25 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          * To add more escapes, please refer to:
          * https://www.freeformatter.com/html-entities.html
          * 
-         * Always use "&&num;__number__;" instead of "&#;__number__;"
+         * Before 2025-01-18, escape sequences had to use "&&num;NUMBER;"
+         * instead of "&#;NUMBER;", because "#" was not escaped. But now "#" can
+         * be typed directly, and does not need to be escaped. So use the normal
+         * spelling for HTML entity codes, i.e., "&#61;" instead of "&&num;61;"
+         * when adding NEW escapes.
+         *
+         * Additionally, after 2025-01-18, '=', '|', '{' and '}' signs can be
+         * escaped only by wrapping them in '%%', following the standard
+         * DokuWiki syntax. So, the escapes below are DEPRECATED, but kept for
+         * backwards compatibility.
          * 
-         * Number sign "#" can be escaped with "&num;" and don't need to be
-         * added to the array below.
          */
         $escapes = array(
+            // DEPRECATED, but kept for backwards compatibility:
             "&&num;61;"  => "=",
-            "&&num;123;" => "{",
+            "&&num;123;" => "%%{%%",
             "&&num;124;" => "|",
-            "&&num;125;" => "}"
+            "&&num;125;" => "%%}%%",
+            "&num;"      => "#"  // Always leave this as the last element!
         );
         
         foreach ( $escapes as $key => $value ) {
