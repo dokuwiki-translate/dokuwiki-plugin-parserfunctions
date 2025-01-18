@@ -306,7 +306,11 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         if ( array_key_exists($test_and_default_string[0], $cases_kv) ) {
         	$result = $cases_kv[$test_and_default_string[0]];
         } else {
-        	$result = $test_and_default_string[1] ?? '';
+            /* Default value:
+             * Explicit declaration (#default = default_value) takes precedence
+             * over implicit one (just 'default_value').
+             */
+        	$result = $cases_kv['#default'] ?? $test_and_default_string[1] ?? '';
         }
         
         return $result;
