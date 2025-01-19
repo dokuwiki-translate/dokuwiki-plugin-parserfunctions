@@ -127,20 +127,23 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             case 'ifeq':
                 $func_result = $this->_IFEQ($params, $func_name);
                 break;
+            case 'ifexist':
+                $func_result = $this->_IFEXIST($params, $func_name);
+                break;
             case 'switch':
-                $func_result = $this->_SWITCH($params);
+                $func_result = $this->_SWITCH($params, $func_name);
                 break;
             default:
-                $func_result = ' <span style="color: red;">' . $this->getLang('error') .
-                               ' <code>'. $func_name . '</code>: ' . 
-                               $this->getLang('no_such_function') . ' </span>';
+                $func_result = '<wrap important>**' . $this->getLang('error') .
+                               ' "' . $func_name . '": ' .
+                               $this->getLang('no_such_function') . '**</wrap>';
                 break;
         }
         
         // The instructions provided to the render() method:
         return $func_result;
     }
-
+    
     /** @inheritDoc */
     public function render($mode, Doku_Renderer $renderer, $data)
     {
@@ -186,30 +189,21 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     
     /**
      * ========== #IF
-     * {{#if: 1st parameter | 2nd parameter | 3rd optional parameter #}}
+     * {{#if: 1st parameter | 2nd parameter | 3rd parameter #}}
      * {{#if: test string | value if test string is not empty | value if test
      * string is empty (or only white space) #}}
      */
     function _IF($params, $func_name)
     {
-        if ( count($params) < 2 ) {
-            $result = ' <span style="color: red;">' . $this->getLang('error') . 
-                      ' <code>'. $func_name . '</code>: ' . $this->getLang('not_enough_params') .
-                      ' </span>';
+        if ( count($params) < 1 ) {
+            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
+                      $func_name . '": ' . $this->getLang('not_enough_params') .
+                      '**</wrap>';
         } else {
             if ( !empty($params[0]) ) {
-                $result = $params[1];
+                $result = $params[1] ?? null;
             } else {
-                if ( !empty($params[2]) ) {
-                    $result = $params[2];
-                } else {
-                    /**
-                     * The last parameter (false) must have been intentionally
-                     * omitted: user wants the result to be null if the test
-                     * string is empty.
-                     */
-                    $result = null;
-                }
+                $result = $params[2] ?? null;
             }
         }
         
@@ -223,15 +217,37 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      */
     function _IFEQ($params, $func_name)
     {
-        if ( count($params) < 4 ) {
-            $result = ' <span style="color: red;">' . $this->getLang('error') . 
-                      ' <code>'. $func_name . '</code>: ' . $this->getLang('not_enough_params') .
-                      ' </span>';
+        if ( count($params) < 2 ) {
+            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
+                      $func_name . '": ' . $this->getLang('not_enough_params') .
+                      '**</wrap>';
         } else {
             if ( $params[0] == $params[1] ) {
-                $result = $params[2];
+                $result = $params[2] ?? null;
             } else {
-                $result = $params[3];
+                $result = $params[3] ?? null;
+            }
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * ========== #IFEXIST
+     * {{#ifexist: 1st parameter | 2nd parameter | 3rd parameter #}}
+     * {{#ifexist: page title | value if exists | value if doesn't exist #}}
+     */
+    function _IFEXIST($params, $func_name)
+    {
+        if ( count($params) < 1 ) {
+            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
+                      $func_name . '": ' . $this->getLang('not_enough_params') .
+                      '**</wrap>';
+        } else {
+            if ( page_exists($params[0]) ){
+                $result = $params[1] ?? null;
+            } else {
+                $result = $params[2] ?? null;
             }
         }
         
@@ -248,88 +264,94 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * | default result
      * #}}
      */
-    function _SWITCH($params)
+    function _SWITCH($params, $func_name)
     {
-        /**
-         * Then:
-         * 
-         * "$params":
-         *      (
-         *          [0] => test string
-         *          [1] => case 1 = value 1
-         *          [2] => case 2 = value 2
-         *          [3] => case 3 = value 3
-         *          [4] => default value
-         *      )
-         */
-
-        $cases_kv = [];
-        $test_and_default_string = [];
-        
-        foreach ( $params as $value ){
-            // 1st) Replace escaped equal sign '%%|%%' by a temporary marker
-            $value = str_replace('%%=%%', '%%TEMP_MARKER%%', $value);
-            // 2nd) Create list of values splited by equal sign "="
-            $value = explode('=', $value);
-            //3rd) Restoring temporary marker to `%%=%%`
-            $value = str_replace('%%TEMP_MARKER%%', '%%=%%', $value);
-            /* This snippet above was necessary to allow the escape sequence of
-             * the equal sign "=" using the standard DokuWiki formatting syntax
-             * which is to wrap it in "%%".
-             * (same as lines 103-113 above)
-             */
-
-        	if ( isset($value[1]) ) {
-        		$cases_kv[trim($value[0])] = trim($value[1]);
-        	} else {
-		        if ( count($cases_kv) == 0 or count($cases_kv) == count($params) ) {
-			        $test_and_default_string[] = trim($value[0]);
-		        } else {
-			        $cases_kv[trim($value[0])] = '%%FALL_THROUGH_TEMP_MARKER%%';
-		        }
-	        }
-        }
-        
-        $count = 0;
-
-        foreach ( $cases_kv as $key=>$value ){
-            $count++;
-	        if ( $value == '%%FALL_THROUGH_TEMP_MARKER%%' ){
-		        $subDict = array_slice($cases_kv, $count);
-		        foreach ( $subDict as $chave=>$valor ){
-			        if ( $valor != '%%FALL_THROUGH_TEMP_MARKER%%' ){
-				        $cases_kv[$key] = $valor;
-				        break;
-			        }
-		        }
-	        }
-        }
-
-        /**
-         * And now:
-         * 
-         * "$cases_kv":
-         *      (
-         *          [case 1] => value 1
-         *          [case 2] => value 2
-         *          [case 3] => value 3
-         *      )
-         * 
-         * "$test_and_default_string":
-         *      (
-         *          [0] => test string
-         *          [1] => default value
-         *      )
-         */
-
-        if ( array_key_exists($test_and_default_string[0], $cases_kv) ) {
-        	$result = $cases_kv[$test_and_default_string[0]];
+        if ( count($params) < 2 ) {
+            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
+                      $func_name . '": ' . $this->getLang('not_enough_params') .
+                      '**</wrap>';
         } else {
-            /* Default value:
-             * Explicit declaration (#default = default_value) takes precedence
-             * over implicit one (just 'default_value').
+            /**
+             * Then:
+             * 
+             * "$params":
+             *      (
+             *          [0] => test string
+             *          [1] => case 1 = value 1
+             *          [2] => case 2 = value 2
+             *          [3] => case 3 = value 3
+             *          [4] => default value
+             *      )
              */
-        	$result = $cases_kv['#default'] ?? $test_and_default_string[1] ?? '';
+
+            $cases_kv = [];
+            $test_and_default_string = [];
+            
+            foreach ( $params as $value ){
+                // 1st) Replace escaped equal sign '%%|%%' by a temporary marker
+                $value = str_replace('%%=%%', '%%TEMP_MARKER%%', $value);
+                // 2nd) Create list of values splited by equal sign "="
+                $value = explode('=', $value);
+                //3rd) Restoring temporary marker to `%%=%%`
+                $value = str_replace('%%TEMP_MARKER%%', '%%=%%', $value);
+                /* This snippet above was necessary to allow the escape sequence of
+                 * the equal sign "=" using the standard DokuWiki formatting syntax
+                 * which is to wrap it in "%%".
+                 * (same as lines 105-115 above)
+                 */
+
+            	if ( isset($value[1]) ) {
+            		$cases_kv[trim($value[0])] = trim($value[1]);
+            	} else {
+		            if ( count($cases_kv) == 0 or count($cases_kv) == count($params) ) {
+			            $test_and_default_string[] = trim($value[0]);
+		            } else {
+			            $cases_kv[trim($value[0])] = '%%FALL_THROUGH_TEMP_MARKER%%';
+		            }
+	            }
+            }
+            
+            $count = 0;
+
+            foreach ( $cases_kv as $key=>$value ){
+                $count++;
+	            if ( $value == '%%FALL_THROUGH_TEMP_MARKER%%' ){
+		            $subDict = array_slice($cases_kv, $count);
+		            foreach ( $subDict as $chave=>$valor ){
+			            if ( $valor != '%%FALL_THROUGH_TEMP_MARKER%%' ){
+				            $cases_kv[$key] = $valor;
+				            break;
+			            }
+		            }
+	            }
+            }
+
+            /**
+             * And now:
+             * 
+             * "$cases_kv":
+             *      (
+             *          [case 1] => value 1
+             *          [case 2] => value 2
+             *          [case 3] => value 3
+             *      )
+             * 
+             * "$test_and_default_string":
+             *      (
+             *          [0] => test string
+             *          [1] => default value
+             *      )
+             */
+
+            if ( array_key_exists($test_and_default_string[0], $cases_kv) ) {
+            	$result = $cases_kv[$test_and_default_string[0]];
+            } else {
+                /* Default value:
+                 * Explicit declaration (#default = default_value) takes precedence
+                 * over implicit one (just 'default_value').
+                 */
+            	$result = $cases_kv['#default'] ?? $test_and_default_string[1] ?? '';
+            }
         }
         
         return $result;
