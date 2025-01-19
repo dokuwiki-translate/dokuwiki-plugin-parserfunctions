@@ -235,7 +235,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     /**
      * ========== #IFEXIST
      * {{#ifexist: 1st parameter | 2nd parameter | 3rd parameter #}}
-     * {{#ifexist: page title | value if exists | value if doesn't exist #}}
+     * {{#ifexist: page title or media, or file/folder path | value if exists
+     *  | value if doesn't exist #}}
      */
     function _IFEXIST($params, $func_name)
     {
@@ -244,7 +245,17 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
                       $func_name . '": ' . $this->getLang('not_enough_params') .
                       '**</wrap>';
         } else {
-            if ( page_exists($params[0]) ){
+            if ( str_contains($params[0], '/') ){
+                if ( str_starts_with($params[0], '/') ){
+                    $isMedia = substr($params[0], 1);
+                } else {
+                    $isMedia = $params[0];
+                }
+            } else {
+                $isMedia = 'data/media/' . str_replace(':', '/', $params[0]);
+            }
+            
+            if ( page_exists($params[0]) or file_exists($isMedia) ){
                 $result = $params[1] ?? null;
             } else {
                 $result = $params[2] ?? null;
