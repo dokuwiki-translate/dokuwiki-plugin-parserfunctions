@@ -134,9 +134,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
                 $func_result = $this->_SWITCH($params, $func_name);
                 break;
             default:
-                $func_result = '<wrap important>**' . $this->getLang('error') .
-                               ' "' . $func_name . '": ' .
-                               $this->getLang('no_such_function') . '**</wrap>';
+                $func_result = $this->_raise_error('important', $func_name,
+                'no_such_function');
                 break;
         }
         
@@ -187,6 +186,18 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         return true;
     }
     
+    function _raise_error($wrap, $func_name, $msg){
+        if ( file_exists('lib/plugins/wrap') ){
+            $wrap_s = '<wrap ' . $wrap . '>';
+            $wrap_e = '</wrap>';
+        } else {
+            $wrap_s = $wrap_e = null;
+        }
+        
+        return $wrap_s . '**' . $this->getLang('error') . ' "' . $func_name .
+               '": ' . $this->getLang($msg) . '**' . $wrap_e;
+    }
+    
     /**
      * ========== #IF
      * {{#if: 1st parameter | 2nd parameter | 3rd parameter #}}
@@ -196,9 +207,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     function _IF($params, $func_name)
     {
         if ( count($params) < 1 ) {
-            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
-                      $func_name . '": ' . $this->getLang('not_enough_params') .
-                      '**</wrap>';
+            $result = $this->_raise_error('alert', $func_name,
+                      'not_enough_params');
         } else {
             if ( !empty($params[0]) ) {
                 $result = $params[1] ?? null;
@@ -218,9 +228,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     function _IFEQ($params, $func_name)
     {
         if ( count($params) < 2 ) {
-            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
-                      $func_name . '": ' . $this->getLang('not_enough_params') .
-                      '**</wrap>';
+            $result = $this->_raise_error('alert', $func_name,
+                      'not_enough_params');
         } else {
             if ( $params[0] == $params[1] ) {
                 $result = $params[2] ?? null;
@@ -241,9 +250,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     function _IFEXIST($params, $func_name)
     {
         if ( count($params) < 1 ) {
-            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
-                      $func_name . '": ' . $this->getLang('not_enough_params') .
-                      '**</wrap>';
+            $result = $this->_raise_error('alert', $func_name,
+                      'not_enough_params');
         } else {
             if ( str_contains($params[0], '/') ){
                 if ( str_starts_with($params[0], '/') ){
@@ -278,9 +286,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     function _SWITCH($params, $func_name)
     {
         if ( count($params) < 2 ) {
-            $result = '<wrap alert>**' . $this->getLang('error') . ' "' .
-                      $func_name . '": ' . $this->getLang('not_enough_params') .
-                      '**</wrap>';
+            $result = $this->_raise_error('alert', $func_name,
+                      'not_enough_params');
         } else {
             /**
              * Then:
