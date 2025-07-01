@@ -2,9 +2,9 @@
 /**
  * DokuWiki Plugin parserfunctions (Syntax Component)
  *
- * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
- * @author  Daniel "Nerun" Rodrigues <danieldiasr@gmail.com>
- * @created: Sat, 09 Dec 2023 14:59 -0300
+ * @license  GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
+ * @author   Daniel "Nerun" Rodrigues <danieldiasr@gmail.com>
+ * @created  Sat, 09 Dec 2023 14:59 -0300
  * 
  * This is my first plugin, and I don't even know PHP well, that's why it's full
  * of comments, but I'll leave it that way so I can consult it in the future.
@@ -15,6 +15,13 @@ use dokuwiki\Utf8\PhpString;
 
 class syntax_plugin_parserfunctions extends SyntaxPlugin
 {
+    /** @var helper_plugin_parserfunctions $helper */
+    private $helper;
+
+    public function __construct() {
+        $this->helper = plugin_load('helper', 'parserfunctions');
+    }
+
     /** @inheritDoc */
     public function getType()
     {
@@ -89,33 +96,22 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             return false;
         }
         
-        /* Function name: "if", "ifeq", "ifexpr" etc.
-         * strtolower converts only ASCII; PhpString::strtolower supports UTF-8,
+        /* The 's' at the end of '/pattern/s' adds support to multiline strings.
+         * preg_match creates array $m by using groups \1 and \2
+         */
+        preg_match('/\{\{#([[:alnum:]]+):(.*)#\}\}/s', $match, $m);
+        /* strtolower converts only ASCII; PhpString::strtolower supports UTF-8,
          * added by "use dokuwiki\Utf8\PhpString;" at line 15. The function
          * names will probably only use ASCII characters, but it's a precaution.
-         * The 's' at the end of '/pattern/s' adds support to multiline strings.
          */
-        $func_name = preg_replace('/\{\{#([[:alpha:](&#)]+):.*#\}\}/s', '\1', $match);
-        $func_name = PhpString::strtolower($func_name);
+        $func_name = PhpString::strtolower($m[1]); // function name: "if", "ifeq", "ifexpr" etc.
+        $parts = $m[2]; // function parameters with pipes etc
 
-        // Delete delimiters "{{#functionname:" and "#}}".
-        // The 's' at the end of '/pattern/s' adds support to multiline strings.
-        $parts = preg_replace('/\{\{#[[:alpha:]]+:(.*)#\}\}/s', '\1', $match);
-        
-        // Create list with all parameters splited by "|" pipe
-        // 1st) Replace pipe '|' by a temporary marker
-        $parts = str_replace('%%|%%', '%%TEMP_MARKER%%', $parts);
-        // 2nd) Create list of parameters splited by pipe "|"
-        $params = explode('|', $parts);
-        //3rd) Restoring temporary marker to `%%|%%`
-        $params = str_replace('%%TEMP_MARKER%%', '%%|%%', $params);
-        /* This snippet above was necessary to allow the escape sequence of the
-         * pipe character "|" using the standard DokuWiki formatting syntax
-         * which is to wrap it in "%%".
+        /* parseParameters below was necessary to allow the escape sequence of
+         * the pipe character "|" using the standard DokuWiki formatting syntax
+         * which is to wrap it in "%%". The $params is trimmed.
          */
-
-        // Stripping whitespace from the beginning and end of strings
-        $params = array_map('trim', $params);
+        $params = $this->helper->parseParameters($parts);
         
         // ==================== FINALLY: do the work! ====================
         switch($func_name){
@@ -134,8 +130,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
                 $func_result = $this->_SWITCH($params, $func_name);
                 break;
             default:
-                $func_result = $this->_raise_error('important', $func_name,
-                'no_such_function');
+                $func_result = $this->helper->formatError('important', $func_name, 'no_such_function');
                 break;
         }
         
@@ -173,7 +168,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         }
         
         // escape sequences
-        $data = $this->_escape($data);
+        $data = $this->helper->processEscapes($data);
 
         // Do not use <div></div> because we need inline substitution!
 		// Both substr() and preg_replace() do the same thing: remove the
@@ -186,18 +181,6 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         return true;
     }
     
-    function _raise_error($wrap, $func_name, $msg){
-        if ( file_exists('lib/plugins/wrap') ){
-            $wrap_s = '<wrap ' . $wrap . '>';
-            $wrap_e = '</wrap>';
-        } else {
-            $wrap_s = $wrap_e = null;
-        }
-        
-        return $wrap_s . '**' . $this->getLang('error') . ' "' . $func_name .
-               '": ' . $this->getLang($msg) . '**' . $wrap_e;
-    }
-    
     /**
      * ========== #IF
      * {{#if: 1st parameter | 2nd parameter | 3rd parameter #}}
@@ -207,8 +190,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     function _IF($params, $func_name)
     {
         if ( count($params) < 1 ) {
-            $result = $this->_raise_error('alert', $func_name,
-                      'not_enough_params');
+            $result = $this->helper->formatError('alert', $func_name, 'not_enough_params');
         } else {
             if ( !empty($params[0]) ) {
                 $result = $params[1] ?? null;
@@ -228,8 +210,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     function _IFEQ($params, $func_name)
     {
         if ( count($params) < 2 ) {
-            $result = $this->_raise_error('alert', $func_name,
-                      'not_enough_params');
+            $result = $this->helper->formatError('alert', $func_name, 'not_enough_params');
         } else {
             if ( $params[0] == $params[1] ) {
                 $result = $params[2] ?? null;
@@ -249,166 +230,45 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      */
     function _IFEXIST($params, $func_name)
     {
-        if ( count($params) < 1 ) {
-            $result = $this->_raise_error('alert', $func_name,
-                      'not_enough_params');
-        } else {
-            if ( str_contains($params[0], '/') ){
-                if ( str_starts_with($params[0], '/') ){
-                    $isMedia = substr($params[0], 1);
-                } else {
-                    $isMedia = $params[0];
-                }
-            } else {
-                $isMedia = 'data/media/' . str_replace(':', '/', $params[0]);
-            }
-            
-            if ( page_exists($params[0]) or file_exists($isMedia) ){
-                $result = $params[1] ?? null;
-            } else {
-                $result = $params[2] ?? null;
-            }
+        if (count($params) < 1) {
+            return $this->helper->formatError('alert', $func_name, 'not_enough_params');
         }
         
-        return $result;
+        $target = trim($params[0]);
+        if ($target === '') {
+            return $this->helper->formatError('alert', $func_name, 'empty_test_parameter');
+        }
+        
+        $exists = $this->helper->checkExistence($target);
+        
+        return $exists
+            ? ($params[1] ?? '')
+            : ($params[2] ?? '');
     }
     
     /**
      * ========== #SWITCH
      * {{#switch: comparison string
-     * | case = result
-     * | case = result
+     * | case1 = result1
      * | ...
-     * | case = result
+     * | caseN = resultN
      * | default result
      * #}}
      */
-    function _SWITCH($params, $func_name)
-    {
-        if ( count($params) < 2 ) {
-            $result = $this->_raise_error('alert', $func_name,
-                      'not_enough_params');
-        } else {
-            /**
-             * Then:
-             * 
-             * "$params":
-             *      (
-             *          [0] => test string
-             *          [1] => case 1 = value 1
-             *          [2] => case 2 = value 2
-             *          [3] => case 3 = value 3
-             *          [4] => default value
-             *      )
-             */
+    function _SWITCH($params, $func_name) {
+        if (count($params) < 2) {
+            return $this->helper->formatError('alert', $func_name, 'not_enough_params');
+        }
 
-            $cases_kv = [];
-            $test_and_default_string = [];
-            
-            foreach ( $params as $value ){
-                // 1st) Replace escaped equal sign '%%|%%' by a temporary marker
-                $value = str_replace('%%=%%', '%%TEMP_MARKER%%', $value);
-                // 2nd) Create list of values splited by equal sign "="
-                $value = explode('=', $value);
-                //3rd) Restoring temporary marker to `%%=%%`
-                $value = str_replace('%%TEMP_MARKER%%', '%%=%%', $value);
-                /* This snippet above was necessary to allow the escape sequence of
-                 * the equal sign "=" using the standard DokuWiki formatting syntax
-                 * which is to wrap it in "%%".
-                 * (same as lines 105-115 above)
-                 */
-
-            	if ( isset($value[1]) ) {
-            		$cases_kv[trim($value[0])] = trim($value[1]);
-            	} else {
-		            if ( count($cases_kv) == 0 or count($cases_kv) == count($params) ) {
-			            $test_and_default_string[] = trim($value[0]);
-		            } else {
-			            $cases_kv[trim($value[0])] = '%%FALL_THROUGH_TEMP_MARKER%%';
-		            }
-	            }
-            }
-            
-            $count = 0;
-
-            foreach ( $cases_kv as $key=>$value ){
-                $count++;
-	            if ( $value == '%%FALL_THROUGH_TEMP_MARKER%%' ){
-		            $subDict = array_slice($cases_kv, $count);
-		            foreach ( $subDict as $chave=>$valor ){
-			            if ( $valor != '%%FALL_THROUGH_TEMP_MARKER%%' ){
-				            $cases_kv[$key] = $valor;
-				            break;
-			            }
-		            }
-	            }
-            }
-
-            /**
-             * And now:
-             * 
-             * "$cases_kv":
-             *      (
-             *          [case 1] => value 1
-             *          [case 2] => value 2
-             *          [case 3] => value 3
-             *      )
-             * 
-             * "$test_and_default_string":
-             *      (
-             *          [0] => test string
-             *          [1] => default value
-             *      )
-             */
-
-            if ( array_key_exists($test_and_default_string[0], $cases_kv) ) {
-            	$result = $cases_kv[$test_and_default_string[0]];
-            } else {
-                /* Default value:
-                 * Explicit declaration (#default = default_value) takes precedence
-                 * over implicit one (just 'default_value').
-                 */
-            	$result = $cases_kv['#default'] ?? $test_and_default_string[1] ?? '';
-            }
+        $parsed = $this->helper->parseSwitchCases($params);
+        
+        // Checks if the test string exists as a key in the switch cases array
+        if (array_key_exists($parsed['test'], $parsed['cases'])) {
+            return $parsed['cases'][$parsed['test']]; // ← May return empty string
         }
         
-        return $result;
-    }
-    
-    /**
-     * Escape sequence handling
-     */
-    function _escape($data){
-        /**
-         * To add more escapes, please refer to:
-         * https://www.freeformatter.com/html-entities.html
-         * 
-         * Before 2025-01-18, escape sequences had to use "&&num;NUMBER;"
-         * instead of "&#;NUMBER;", because "#" was not escaped. But now "#" can
-         * be typed directly, and does not need to be escaped. So use the normal
-         * spelling for HTML entity codes, i.e., "&#61;" instead of "&&num;61;"
-         * when adding NEW escapes.
-         *
-         * Additionally, after 2025-01-18, '=', '|', '{' and '}' signs can be
-         * escaped only by wrapping them in '%%', following the standard
-         * DokuWiki syntax. So, the escapes below are DEPRECATED, but kept for
-         * backwards compatibility.
-         * 
-         */
-        $escapes = array(
-            // DEPRECATED, but kept for backwards compatibility:
-            "&&num;61;"  => "=",
-            "&&num;123;" => "%%{%%",
-            "&&num;124;" => "|",
-            "&&num;125;" => "%%}%%",
-            "&num;"      => "#"  // Always leave this as the last element!
-        );
-        
-        foreach ( $escapes as $key => $value ) {
-            $data = preg_replace("/$key/s", $value, $data);
-        }
-        
-        return $data;
+        // Returns the default (explicit or implicit) only if the case does not exist
+        return $parsed['default'] ?? '';
     }
 }
-// vim:ts=4:sw=4:et:enc=utf-8:
+
