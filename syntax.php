@@ -59,12 +59,12 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     public function connectTo($mode)
     {
         /* READ: https://www.dokuwiki.org/devel:syntax_plugins#patterns
-         * This pattern accepts any alphabetical function name but not nested
+         * This pattern accepts any alphanumeric function name but not nested
          * functions.
          *
          * ChatGPT helped me to fix this pattern! (18 jan 2025)
          */
-        $this->Lexer->addSpecialPattern('\{\{#[[:alpha:]]+:(?:(?!\{\{#|#\}\}).)*#\}\}', $mode, 'plugin_parserfunctions');
+        $this->Lexer->addSpecialPattern('\{\{#[[:alnum:]]+:(?:(?!\{\{#|#\}\}).)*#\}\}', $mode, 'plugin_parserfunctions');
     }
 
     /** @inheritDoc */
@@ -171,11 +171,11 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         $data = $this->helper->processEscapes($data);
 
         // Do not use <div></div> because we need inline substitution!
-		// Both substr() and preg_replace() do the same thing: remove the
-		// first '<p>' and the last '</p>'
 		$data = $renderer->render_text($data, 'xhtml');
-		//$data = substr( $data, 4, -5 );
-		$data = preg_replace( '/<p>((.|\n)*?)<\/p>/', '\1', $data );
+		// Remove the first '<p>' and the last '</p>'
+		if (substr($data, 0, 3) === '<p>' && substr($data, -4) === '</p>') {
+            $data = substr($data, 3, -4);
+        }
 		$renderer->doc .= $data;
 
         return true;
@@ -193,9 +193,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             $result = $this->helper->formatError('alert', $func_name, 'not_enough_params');
         } else {
             if ( !empty($params[0]) ) {
-                $result = $params[1] ?? null;
+                $result = $params[1] ?? '';
             } else {
-                $result = $params[2] ?? null;
+                $result = $params[2] ?? '';
             }
         }
         
@@ -213,9 +213,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
             $result = $this->helper->formatError('alert', $func_name, 'not_enough_params');
         } else {
             if ( $params[0] == $params[1] ) {
-                $result = $params[2] ?? null;
+                $result = $params[2] ?? '';
             } else {
-                $result = $params[3] ?? null;
+                $result = $params[3] ?? '';
             }
         }
         
@@ -223,10 +223,21 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     }
     
     /**
-     * ========== #IFEXIST
-     * {{#ifexist: 1st parameter | 2nd parameter | 3rd parameter #}}
-     * {{#ifexist: page title or media, or file/folder path | value if exists
-     *  | value if doesn't exist #}}
+     * ======= #IFEXIST
+     * Syntax: {{#ifexist: target | if-true | if-false #}}
+     *
+     * Accepts:
+     * - DokuWiki page/media IDs (e.g. "wiki:start", "wiki:image.png")
+     * - Namespaces (must end with ":", e.g. "wiki:")
+     * - Absolute or relative filesystem paths
+     *
+     * @param array $params [
+     *     0 => string $target   Path or ID to check (required)
+     *     1 => string $ifTrue   Value to return if target exists (optional)
+     *     2 => string $ifFalse  Value to return if target doesn't exist (optional)
+     * ]
+     * @param string $func_name Name of the parser function (for error messages)
+     * @return string Rendered output based on existence check
      */
     function _IFEXIST($params, $func_name)
     {

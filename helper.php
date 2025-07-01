@@ -134,26 +134,52 @@ class helper_plugin_parserfunctions extends DokuWiki_Plugin {
     }
     
     /**
-    * Checks for the existence of a page/file
-    *
-    * @param array $params [
-    * 0 => target (mandatory string),
-    * 1 => value if exists (optional),
-    * 2 => value if does not exist (optional)
-    * ]
-    * @param string $func_name Function name for error messages
-    * @return string Result or error message
-    */
+     * Checks for the existence of a folder (namespace) or a file (media or page)
+     *
+     * Accepts:
+     * - Absolute or relative filesystem paths
+     * - DokuWiki page/media IDs (e.g. "wiki:start", "wiki:image.png")
+     * - DokuWiki namespaces (must end with a colon, e.g. "wiki:")
+     *
+     * @param string $target The identifier or path to check
+     * @return bool True if it exists (file, page, media, or namespace), false otherwise
+     */
     public function checkExistence($target) {
-        if (str_contains($target, '/')) {
-            $mediaPath = str_starts_with($target, '/') 
-                ? substr($target, 1) 
-                : $target;
-        } else {
-            $mediaPath = 'data/media/' . str_replace(':', '/', $target);
+        // Normalize spaces around ':', transform "wiki : help" → "wiki:help"
+        $target = preg_replace('/\s*:\s*/', ':', $target);
+        
+        // If it is a real absolute or relative path, test as file or folder
+        if (file_exists($target)) {
+            return true;
         }
         
-        return page_exists($target) || file_exists($mediaPath);
+        // If path started with '/', try as relative to DOKU_INC by removing '/'
+        if (strlen($target) > 0 && $target[0] === '/') {
+            $relativePath = ltrim($target, '/');
+            $fullPath = DOKU_INC . $relativePath;
+            if (file_exists($fullPath)) {
+                return true;
+            }
+        }
+
+        // Try as DokuWiki page
+        if (page_exists($target)) {
+            return true;
+        }
+
+        // Try as DokuWiki media
+        if (file_exists(mediaFN($target))) {
+            return true;
+        }
+
+        // Try as namespace (directory inside data/pages/)
+        $namespacePath = str_replace(':', '/', $target);
+        $namespaceDir = DOKU_INC . 'data/pages/' . $namespacePath;
+        if (is_dir($namespaceDir)) {
+            return true;
+        }
+
+        return false;
     }
     
     /**
@@ -196,7 +222,7 @@ class helper_plugin_parserfunctions extends DokuWiki_Plugin {
      * Format error messages consistently
      */
     public function formatError($type, $function, $messageKey) {
-        $wrapPluginExists = file_exists('lib/plugins/wrap');
+        $wrapPluginExists = file_exists(DOKU_INC . 'lib/plugins/wrap');
         
         $errorMsg = '**' . $this->getLang('error') . ' "' . $function . '": '
                     . $this->getLang($messageKey) . '**';
