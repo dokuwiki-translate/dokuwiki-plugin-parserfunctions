@@ -224,7 +224,7 @@ class helper_plugin_parserfunctions extends DokuWiki_Plugin {
     public function formatError($type, $function, $messageKey) {
         $wrapPluginExists = file_exists(DOKU_INC . 'lib/plugins/wrap');
         
-        $errorMsg = '**' . $this->getLang('error') . ' "' . $function . '": '
+        $errorMsg = '**' . $this->getLang('error') . ' ' . $function . ': '
                     . $this->getLang($messageKey) . '**';
         
         if ($wrapPluginExists) {

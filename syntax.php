@@ -59,18 +59,94 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
     public function connectTo($mode)
     {
         /* READ: https://www.dokuwiki.org/devel:syntax_plugins#patterns
-         * This pattern accepts any alphanumeric function name but not nested
-         * functions.
+         * This pattern accepts any alphanumeric function AND nested functions.
          *
-         * ChatGPT helped me to fix this pattern! (18 jan 2025)
+         * $this->Lexer->addSpecialPattern('\{\{#.+?#\}\}', $mode, 'plugin_parserfunctions');
+         * Captures nested functions up to level-1:
+         * $this->Lexer->addSpecialPattern('\{\{#[[:alnum:]]+:(?:(?:[^\{#]*?\{\{.*?#\}\})|.*?)+?#\}\}', $mode, 'plugin_parserfunctions');
+         *
+         * SEE action.php
          */
-        $this->Lexer->addSpecialPattern('\{\{#[[:alnum:]]+:(?:(?!\{\{#|#\}\}).)*#\}\}', $mode, 'plugin_parserfunctions');
+    }
+
+    // @author  ChatGPT -- Wed, 02 jul 2025 12:04:42 -0300
+    public function resolveFunction($text)
+    {
+        // Remove {{# and #}} delimiters if present
+        if (substr($text, 0, 3) === '{{#' && substr($text, -3) === '#}}') {
+            $text = substr($text, 3, -3);
+        }
+
+        // Recursively resolves all nested functions from the inside out
+        $text = $this->resolveNestedFunctions($text);
+
+        // Separates function name and parameters
+        preg_match('/^([[:alnum:]]+):(.*)$/s', $text, $m);
+
+        if (empty($m[1])) {
+            return $this->helper->formatError('important', 'function_name', 'invalid_syntax');
+        }
+
+        $funcName = PhpString::strtolower($m[1]);
+        $paramsText = $m[2] ?? '';
+
+        $params = $this->helper->parseParameters($paramsText);
+
+        switch ($funcName) {
+            case 'if':
+                return $this->_IF($params, $funcName);
+            case 'ifeq':
+                return $this->_IFEQ($params, $funcName);
+            case 'ifexist':
+                return $this->_IFEXIST($params, $funcName);
+            case 'switch':
+                return $this->_SWITCH($params, $funcName);
+            default:
+                return $this->helper->formatError('important', $funcName, 'no_such_function');
+        }
+    }
+
+    // @author  ChatGPT -- Wed, 02 jul 2025 12:04:42 -0300
+    private function resolveNestedFunctions($text)
+    {
+        $offset = 0;
+
+        while (($start = strpos($text, '{{#', $offset)) !== false) {
+            $level = 0;
+            $length = strlen($text);
+
+            for ($i = $start; $i < $length - 2; $i++) {
+                if (substr($text, $i, 3) === '{{#') {
+                    $level++;
+                    $i += 2;
+                } elseif (substr($text, $i, 3) === '#}}') {
+                    $level--;
+                    $i += 2;
+
+                    if ($level === 0) {
+                        $full = substr($text, $start, $i - $start + 1);
+                        $resolved = $this->resolveFunction($full);
+                        $text = substr_replace($text, $resolved, $start, strlen($full));
+                        // Start from the beginning because the text has changed
+                        $offset = 0;
+                        continue 2;
+                    }
+                }
+            }
+
+            // If you got here, invalid syntax (no #}})
+            break;
+        }
+
+        return $text;
     }
 
     /** @inheritDoc */
-    public function handle($match, $state, $pos, Doku_Handler $handler)
-    {
-        /* READ: https://www.dokuwiki.org/devel:syntax_plugins#handle_method
+    public function handle($match, $state, $pos, Doku_Handler $handler) {
+        /* This method is only called if the Lexer, in the connectTo() method,
+         * finds a $match.
+         * 
+         * READ: https://www.dokuwiki.org/devel:syntax_plugins#handle_method
          * This is the part of your plugin which should do all the work. Before
          * DokuWiki renders the wiki page it creates a list of instructions for
          * the renderer. The plugin's handle() method generates the render
@@ -90,52 +166,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          *   
          *   $handler           — Object Reference to the Doku_Handler object.
          */
-        
-        // Exit if no text matched by the patterns.
-        if (empty($match)) {
-            return false;
-        }
-        
-        /* The 's' at the end of '/pattern/s' adds support to multiline strings.
-         * preg_match creates array $m by using groups \1 and \2
-         */
-        preg_match('/\{\{#([[:alnum:]]+):(.*)#\}\}/s', $match, $m);
-        /* strtolower converts only ASCII; PhpString::strtolower supports UTF-8,
-         * added by "use dokuwiki\Utf8\PhpString;" at line 15. The function
-         * names will probably only use ASCII characters, but it's a precaution.
-         */
-        $func_name = PhpString::strtolower($m[1]); // function name: "if", "ifeq", "ifexpr" etc.
-        $parts = $m[2]; // function parameters with pipes etc
-
-        /* parseParameters below was necessary to allow the escape sequence of
-         * the pipe character "|" using the standard DokuWiki formatting syntax
-         * which is to wrap it in "%%". The $params is trimmed.
-         */
-        $params = $this->helper->parseParameters($parts);
-        
-        // ==================== FINALLY: do the work! ====================
-        switch($func_name){
-            // To add a new function, first add a "case" below, make it call a
-            // function, then write the function.
-            case 'if':
-                $func_result = $this->_IF($params, $func_name);
-                break;
-            case 'ifeq':
-                $func_result = $this->_IFEQ($params, $func_name);
-                break;
-            case 'ifexist':
-                $func_result = $this->_IFEXIST($params, $func_name);
-                break;
-            case 'switch':
-                $func_result = $this->_SWITCH($params, $func_name);
-                break;
-            default:
-                $func_result = $this->helper->formatError('important', $func_name, 'no_such_function');
-                break;
-        }
-        
-        // The instructions provided to the render() method:
-        return $func_result;
+        return $this->resolveFunction($match);
     }
     
     /** @inheritDoc */
