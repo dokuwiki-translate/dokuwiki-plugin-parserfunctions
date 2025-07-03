@@ -101,6 +101,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
                 return $this->_IFEXIST($params, $funcName);
             case 'switch':
                 return $this->_SWITCH($params, $funcName);
+            case 'expr':
+                return $this->_EXPR($params, $funcName);
             default:
                 return $this->helper->formatError('important', $funcName, 'no_such_function');
         }
@@ -218,10 +220,10 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * {{#if: test string | value if test string is not empty | value if test
      * string is empty (or only white space) #}}
      */
-    function _IF($params, $func_name)
+    function _IF($params, $funcName)
     {
         if ( count($params) < 1 ) {
-            $result = $this->helper->formatError('alert', $func_name, 'not_enough_params');
+            $result = $this->helper->formatError('alert', $funcName, 'not_enough_params');
         } else {
             if ( !empty($params[0]) ) {
                 $result = $params[1] ?? '';
@@ -238,10 +240,10 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * {{#ifeq: 1st parameter | 2nd parameter | 3rd parameter | 4th parameter #}}
      * {{#ifeq: string 1 | string 2 | value if identical | value if different #}}
      */
-    function _IFEQ($params, $func_name)
+    function _IFEQ($params, $funcName)
     {
         if ( count($params) < 2 ) {
-            $result = $this->helper->formatError('alert', $func_name, 'not_enough_params');
+            $result = $this->helper->formatError('alert', $funcName, 'not_enough_params');
         } else {
             if ( $params[0] == $params[1] ) {
                 $result = $params[2] ?? '';
@@ -267,18 +269,18 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      *     1 => string $ifTrue   Value to return if target exists (optional)
      *     2 => string $ifFalse  Value to return if target doesn't exist (optional)
      * ]
-     * @param string $func_name Name of the parser function (for error messages)
+     * @param string $funcName Name of the parser function (for error messages)
      * @return string Rendered output based on existence check
      */
-    function _IFEXIST($params, $func_name)
+    function _IFEXIST($params, $funcName)
     {
         if (count($params) < 1) {
-            return $this->helper->formatError('alert', $func_name, 'not_enough_params');
+            return $this->helper->formatError('alert', $funcName, 'not_enough_params');
         }
         
         $target = trim($params[0]);
         if ($target === '') {
-            return $this->helper->formatError('alert', $func_name, 'empty_test_parameter');
+            return $this->helper->formatError('alert', $funcName, 'empty_test_parameter');
         }
         
         $exists = $this->helper->checkExistence($target);
@@ -297,9 +299,9 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * | default result
      * #}}
      */
-    function _SWITCH($params, $func_name) {
+    function _SWITCH($params, $funcName) {
         if (count($params) < 2) {
-            return $this->helper->formatError('alert', $func_name, 'not_enough_params');
+            return $this->helper->formatError('alert', $funcName, 'not_enough_params');
         }
 
         $parsed = $this->helper->parseSwitchCases($params);
@@ -311,6 +313,19 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         
         // Returns the default (explicit or implicit) only if the case does not exist
         return $parsed['default'] ?? '';
+    }
+
+    /**
+     * ========== #EXPR
+     * This function evaluates a mathematical expression and returns the
+     * calculated value.
+     */
+    private function _EXPR($params, $funcName) {
+        if (!isset($params[0])) {
+            return $this->helper->formatError('alert', $funcName, 'empty_test_parameter');
+        }
+
+        return $this->helper->evaluateMathExpression($params[0]);
     }
 }
 

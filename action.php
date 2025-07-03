@@ -42,13 +42,28 @@ class action_plugin_parserfunctions extends ActionPlugin
 
     private function processParserFunctions($text)
     {
+        // 1. Protects escaped blocks
+        $protectedBlocks = [];
+        /* The "s" modifier makes . catch line breaks.
+         * The "i" modifier ignores case (if someone writes <CODE>).
+         */
+        $text = preg_replace_callback('/%%.*?%%|<(nowiki|code|file|html)[^>]*>.*?<\/\1>/si', function ($matches) use (&$protectedBlocks) {
+            $key = '@@ESC' . count($protectedBlocks) . '@@';
+            $protectedBlocks[$key] = $matches[0];
+            return $key;
+        }, $text);
+
+        // 2. Processes functions normally
         $index = 0;
         while (($match = $this->extractBalancedFunction($text)) !== false) {
-            $placeholder = "@@PF" . str_pad($index, 3, '0', STR_PAD_LEFT) . "@@";
             $resolved = plugin_load('syntax', 'parserfunctions')->resolveFunction($match);
-
             $text = str_replace($match, $resolved, $text);
             $index++;
+        }
+
+        // 3. Restores protected blocks
+        foreach ($protectedBlocks as $key => $original) {
+            $text = str_replace($key, $original, $text);
         }
 
         return $text;

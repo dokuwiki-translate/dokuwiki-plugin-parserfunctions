@@ -233,5 +233,29 @@ class helper_plugin_parserfunctions extends DokuWiki_Plugin {
         
         return $errorMsg;
     }
+
+    /**
+     * Evaluates a mathematical expression consistently
+     */
+    public function evaluateMathExpression($expr) {
+        $funcName = 'expr';
+        $expr = trim($expr);
+
+        // Rejects characters outside the permitted set
+        if (preg_match('/[^0-9\.\+\-\*\/\(\) %]/', $expr)) {
+            return $this->formatError('alert', $funcName, 'invalid_expression');
+        }
+
+        try {
+            // Simple evaluation
+            $result = eval('return (' . $expr . ');');
+            if (!is_numeric($result) || is_infinite($result) || is_nan($result)) {
+                return $this->formatError('alert', $funcName, 'undefined_result');
+            }
+            return $result;
+        } catch (Throwable $e) {
+            return $this->formatError('alert', $funcName, 'evaluation_error');
+        }
+    }
 }
 
