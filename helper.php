@@ -242,16 +242,32 @@ class helper_plugin_parserfunctions extends DokuWiki_Plugin {
         $expr = trim($expr);
 
         // Rejects characters outside the permitted set
-        if (preg_match('/[^0-9eE\.\+\-\*\/\(\) %]/', $expr)) {
+        if (!preg_match('/^(
+                            \s*|
+                            \b(?:and|or|xor|not)\b|                # Reserved words first
+                            ==|!=|<=|>=|<|>|                       # Comparisons
+                            \+|\-|\*|\/|%|                         # Arithmetic
+                            \(|\)|                                 # Parentheses
+                            &&|\|\||!|                             # Symbolic logics
+                            [0-9]+(\.[0-9]+)?([eE][\+\-]?[0-9]+)?  # Numbers with period and exponent
+                        )+$/ix'
+                        , $expr)) {
             return $this->formatError('alert', $funcName, 'invalid_expression');
         }
 
         try {
+            $expr = preg_replace('/\bnot\b/i', '!', $expr);
             // Simple evaluation
             $result = eval('return (' . $expr . ');');
+            
             if (!is_numeric($result) || is_infinite($result) || is_nan($result)) {
-                return $this->formatError('alert', $funcName, 'undefined_result');
+                if (is_bool($result)) {
+                    return $result ? 1 : 0;
+                } else {
+                    return $this->formatError('alert', $funcName, 'undefined_result');
+                }
             }
+            
             return $result;
         } catch (Throwable $e) {
             return $this->formatError('alert', $funcName, 'evaluation_error');
