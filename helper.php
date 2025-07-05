@@ -242,7 +242,7 @@ class helper_plugin_parserfunctions extends DokuWiki_Plugin {
         $expr = trim($expr);
 
         // Rejects characters outside the permitted set
-        if (preg_match('/[^0-9\.\+\-\*\/\(\) %]/', $expr)) {
+        if (preg_match('/[^0-9eE\.\+\-\*\/\(\) %]/', $expr)) {
             return $this->formatError('alert', $funcName, 'invalid_expression');
         }
 

@@ -1,7 +1,7 @@
 base   parserfunctions
 author Daniel "Nerun" Rodrigues
 email  danieldiasr@gmail.com
-date   2025-07-03
+date   2025-07-04
 name   ParserFunctions plugin
 desc   Provides additional parser functions to DokuWiki.
 url    https://www.dokuwiki.org/plugin:parserfunctions
