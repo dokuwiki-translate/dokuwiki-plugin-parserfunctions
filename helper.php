@@ -1,6 +1,4 @@
-<?php
-
-use dokuwiki\Extension\Plugin;
+<?php // phpcs:ignore PSR1.Files.SideEffects.FoundWithSymbols
 
 /**
  * DokuWiki Plugin parserfunctions (Helper Component)
@@ -9,6 +7,8 @@ use dokuwiki\Extension\Plugin;
  * @author   Daniel "Nerun" Rodrigues <danieldiasr@gmail.com>
  * @created  Tue, 01 jul 2025 15:06:42 -0300
  */
+
+use dokuwiki\Extension\Plugin;
 
 if (!defined('DOKU_INC')) die();
 

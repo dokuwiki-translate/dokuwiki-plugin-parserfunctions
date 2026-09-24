@@ -67,7 +67,8 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
          *
          * $this->Lexer->addSpecialPattern('\{\{#.+?#\}\}', $mode, 'plugin_parserfunctions');
          * Captures nested functions up to level-1:
-         * $this->Lexer->addSpecialPattern('\{\{#[[:alnum:]]+:(?:(?:[^\{#]*?\{\{.*?#\}\})|.*?)+?#\}\}', $mode, 'plugin_parserfunctions');
+         * $this->Lexer->addSpecialPattern('\{\{#[[:alnum:]]+:(?:(?:[^\{#]*?\{\{.*?#\}\})|.*?)+?#\}\}',
+         *                                 $mode, 'plugin_parserfunctions');
          *
          * SEE action.php
          */
@@ -97,11 +98,11 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
         $params = $this->helper->parseParameters($paramsText);
 
         return match ($funcName) {
-            'if' => $this->_IF($params, $funcName),
-            'ifeq' => $this->_IFEQ($params, $funcName),
-            'ifexist' => $this->_IFEXIST($params, $funcName),
-            'switch' => $this->_SWITCH($params, $funcName),
-            'expr' => $this->_EXPR($params, $funcName),
+            'if' => $this->fnIF($params, $funcName),
+            'ifeq' => $this->fnIFEQ($params, $funcName),
+            'ifexist' => $this->fnIFEXIST($params, $funcName),
+            'switch' => $this->fnSWITCH($params, $funcName),
+            'expr' => $this->fnEXPR($params, $funcName),
             default => $this->helper->formatError('important', $funcName, 'no_such_function'),
         };
     }
@@ -219,7 +220,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * {{#if: test string | value if test string is not empty | value if test
      * string is empty (or only white space) #}}
      */
-    public function _IF($params, $funcName)
+    public function fnIF($params, $funcName)
     {
         if (count($params) < 1) {
             $result = $this->helper->formatError('alert', $funcName, 'not_enough_params');
@@ -239,7 +240,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * {{#ifeq: 1st parameter | 2nd parameter | 3rd parameter | 4th parameter #}}
      * {{#ifeq: string 1 | string 2 | value if identical | value if different #}}
      */
-    public function _IFEQ($params, $funcName)
+    public function fnIFEQ($params, $funcName)
     {
         if (count($params) < 2) {
             $result = $this->helper->formatError('alert', $funcName, 'not_enough_params');
@@ -271,7 +272,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * @param string $funcName Name of the parser function (for error messages)
      * @return string Rendered output based on existence check
      */
-    public function _IFEXIST($params, $funcName)
+    public function fnIFEXIST($params, $funcName)
     {
         if (count($params) < 1) {
             return $this->helper->formatError('alert', $funcName, 'not_enough_params');
@@ -298,7 +299,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * | default result
      * #}}
      */
-    public function _SWITCH($params, $funcName)
+    public function fnSWITCH($params, $funcName)
     {
         if (count($params) < 2) {
             return $this->helper->formatError('alert', $funcName, 'not_enough_params');
@@ -320,7 +321,7 @@ class syntax_plugin_parserfunctions extends SyntaxPlugin
      * This function evaluates a mathematical expression and returns the
      * calculated value.
      */
-    private function _EXPR($params, $funcName)
+    private function fnEXPR($params, $funcName)
     {
         if (!isset($params[0])) {
             return $this->helper->formatError('alert', $funcName, 'empty_test_parameter');
